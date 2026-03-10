@@ -32,6 +32,18 @@ public class Document {
     @Column(nullable = false)
     private Boolean isSigned;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer requiredSignatures = 1;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer signatureCount = 0;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean isPartiallySigned = false;
+
     private LocalDateTime signedDate;
 
     @Column(length = 1000)
@@ -66,6 +78,15 @@ public class Document {
         }
         if (isSigned == null) {
             isSigned = false;
+        }
+        if (requiredSignatures == null) {
+            requiredSignatures = 1;
+        }
+        if (signatureCount == null) {
+            signatureCount = 0;
+        }
+        if (isPartiallySigned == null) {
+            isPartiallySigned = false;
         }
     }
 }

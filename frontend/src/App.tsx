@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import './App.css';
 import { DocumentDTO } from './types';
 import { documentApi } from './api';
@@ -77,11 +77,12 @@ function App() {
             <p><strong>Features:</strong></p>
             <ul style={{ marginLeft: '1.5rem', marginTop: '0.5rem' }}>
               <li>Upload PDF documents to the server</li>
+              <li>Choose 1-4 required signatures per uploaded document</li>
               <li>Automatic detection of existing QEC signatures in uploaded PDFs</li>
-              <li>Client-side PDF signing (demo mode with visible signatures)</li>
+              <li>Client-side PDF signing with partial-sign progress tracking</li>
               <li>Server-side signature verification using Apache PDFBox</li>
               <li>QEC certificate detection and validation</li>
-              <li>Document status tracking (signed/unsigned)</li>
+              <li>Document status tracking (unsigned/partially signed/signed)</li>
             </ul>
 
             <p style={{ marginTop: '1rem' }}><strong>Production Implementation Notes:</strong></p>

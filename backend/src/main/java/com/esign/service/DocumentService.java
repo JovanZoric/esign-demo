@@ -13,6 +13,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -25,8 +26,10 @@ public class DocumentService {
     private final PdfSignatureVerificationService signatureVerificationService;
 
     @Transactional
-    public DocumentDTO uploadDocument(MultipartFile file) {
+    public DocumentDTO uploadDocument(MultipartFile file, Integer requiredSignatures) {
         try {
+            int normalizedRequiredSignatures = normalizeRequiredSignatures(requiredSignatures);
+
             // Store file
             String storedFilename = fileStorageService.store(file);
 
@@ -36,16 +39,16 @@ public class DocumentService {
                     .filePath(storedFilename)
                     .uploadDate(LocalDateTime.now())
                     .isSigned(false)
+                    .requiredSignatures(normalizedRequiredSignatures)
+                    .signatureCount(0)
+                    .isPartiallySigned(false)
                     .fileSize(file.getSize())
                     .build();
 
             // Check if PDF has existing signature
             byte[] fileBytes = file.getBytes();
-            SignatureInfo signatureInfo = signatureVerificationService.verifyPdfSignature(fileBytes);
-
-            if (signatureInfo.getIsSigned()) {
-                updateDocumentWithSignatureInfo(document, signatureInfo);
-            }
+            SignatureInfo signatureInfo = signatureVerificationService.verifyPdfSignature(fileBytes, normalizedRequiredSignatures);
+            syncDocumentWithSignatureInfo(document, signatureInfo);
 
             document = documentRepository.save(document);
             log.info("Document uploaded: {} (ID: {})", file.getOriginalFilename(), document.getId());
@@ -84,13 +87,11 @@ public class DocumentService {
                 .orElseThrow(() -> new RuntimeException("Document not found: " + id));
 
         byte[] fileBytes = fileStorageService.readFileBytes(document.getFilePath());
-        SignatureInfo signatureInfo = signatureVerificationService.verifyPdfSignature(fileBytes);
+        SignatureInfo signatureInfo = signatureVerificationService.verifyPdfSignature(fileBytes, document.getRequiredSignatures());
 
         // Update document with signature information
-        if (signatureInfo.getIsSigned()) {
-            updateDocumentWithSignatureInfo(document, signatureInfo);
-            documentRepository.save(document);
-        }
+        syncDocumentWithSignatureInfo(document, signatureInfo);
+        documentRepository.save(document);
 
         return signatureInfo;
     }
@@ -111,11 +112,8 @@ public class DocumentService {
 
             // Verify signature
             byte[] fileBytes = signedFile.getBytes();
-            SignatureInfo signatureInfo = signatureVerificationService.verifyPdfSignature(fileBytes);
-
-            if (signatureInfo.getIsSigned()) {
-                updateDocumentWithSignatureInfo(document, signatureInfo);
-            }
+            SignatureInfo signatureInfo = signatureVerificationService.verifyPdfSignature(fileBytes, document.getRequiredSignatures());
+            syncDocumentWithSignatureInfo(document, signatureInfo);
 
             document = documentRepository.save(document);
             log.info("Document updated with signed version: {} (ID: {})", document.getFilename(), id);
@@ -137,8 +135,18 @@ public class DocumentService {
         log.info("Document deleted: {} (ID: {})", document.getFilename(), id);
     }
 
-    private void updateDocumentWithSignatureInfo(Document document, SignatureInfo signatureInfo) {
-        document.setIsSigned(true);
+    private void syncDocumentWithSignatureInfo(Document document, SignatureInfo signatureInfo) {
+        int requiredSignatures = normalizeRequiredSignatures(
+                Objects.requireNonNullElse(signatureInfo.getRequiredSignatures(), document.getRequiredSignatures())
+        );
+        int signatureCount = Math.max(0, Objects.requireNonNullElse(signatureInfo.getSignatureCount(), 0));
+        boolean isSigned = Boolean.TRUE.equals(signatureInfo.getIsSigned()) && signatureCount >= requiredSignatures;
+        boolean isPartiallySigned = signatureCount > 0 && signatureCount < requiredSignatures;
+
+        document.setRequiredSignatures(requiredSignatures);
+        document.setSignatureCount(signatureCount);
+        document.setIsSigned(isSigned);
+        document.setIsPartiallySigned(isPartiallySigned);
         document.setSignerName(signatureInfo.getSignerName());
         document.setSignerCertificateIssuer(signatureInfo.getSignerCertificateIssuer());
         document.setCertificateSerialNumber(signatureInfo.getCertificateSerialNumber());
@@ -156,7 +164,19 @@ public class DocumentService {
                 log.warn("Could not parse sign date: {}", signatureInfo.getSignDate());
                 document.setSignedDate(LocalDateTime.now());
             }
+        } else if (signatureCount == 0) {
+            document.setSignedDate(null);
         }
+    }
+
+    private int normalizeRequiredSignatures(Integer requiredSignatures) {
+        if (requiredSignatures == null) {
+            return 1;
+        }
+        if (requiredSignatures < 1 || requiredSignatures > 4) {
+            throw new IllegalArgumentException("Required signatures must be between 1 and 4");
+        }
+        return requiredSignatures;
     }
 
     private DocumentDTO toDTO(Document document) {
@@ -165,6 +185,9 @@ public class DocumentService {
                 .filename(document.getFilename())
                 .uploadDate(document.getUploadDate())
                 .isSigned(document.getIsSigned())
+                .requiredSignatures(document.getRequiredSignatures())
+                .signatureCount(document.getSignatureCount())
+                .isPartiallySigned(document.getIsPartiallySigned())
                 .signedDate(document.getSignedDate())
                 .signerName(document.getSignerName())
                 .signerCertificateIssuer(document.getSignerCertificateIssuer())

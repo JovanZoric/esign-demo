@@ -10,6 +10,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [requiredSignatures, setRequiredSignatures] = useState(1);
 
   const handleFileSelect = async (file: File) => {
     if (!file) return;
@@ -22,7 +23,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
     try {
       setUploading(true);
       setError(null);
-      const document = await documentApi.uploadDocument(file);
+      const document = await documentApi.uploadDocument(file, requiredSignatures);
       onUploadSuccess(document);
     } catch (err: any) {
       console.error('Upload error:', err);
@@ -62,6 +63,22 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
   return (
     <div className="card">
       <h2>Upload PDF Document</h2>
+      <div className="upload-options">
+        <label htmlFor="required-signatures">Required signatures</label>
+        <select
+          id="required-signatures"
+          value={requiredSignatures}
+          onChange={(e) => setRequiredSignatures(Number(e.target.value))}
+          disabled={uploading}
+        >
+          {[1, 2, 3, 4].map((count) => (
+            <option key={count} value={count}>
+              {count}
+            </option>
+          ))}
+        </select>
+        <span className="upload-options-hint">Choose how many demo signatures this PDF needs.</span>
+      </div>
       <div
         className={`upload-area ${dragOver ? 'dragover' : ''}`}
         onDrop={handleDrop}

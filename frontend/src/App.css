@@ -114,6 +114,31 @@ body {
   transition: all 0.3s;
 }
 
+.upload-options {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.upload-options label {
+  font-weight: 600;
+  color: #333;
+}
+
+.upload-options select {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #c7d2e0;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.upload-options-hint {
+  color: #666;
+  font-size: 0.9rem;
+}
+
 .upload-area:hover,
 .upload-area.dragover {
   border-color: #1976d2;
@@ -268,6 +293,19 @@ body {
   padding: 1rem;
   margin-top: 1rem;
   border-radius: 4px;
+}
+
+.signature-progress-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  background: #f5f9ff;
+  border: 1px solid #d7e6fb;
+  border-radius: 6px;
+  color: #24507a;
 }
 
 .signature-details h3 {

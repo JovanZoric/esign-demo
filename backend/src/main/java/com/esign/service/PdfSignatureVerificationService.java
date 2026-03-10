@@ -39,9 +39,12 @@ public class PdfSignatureVerificationService {
         Security.addProvider(new BouncyCastleProvider());
     }
 
-    public SignatureInfo verifyPdfSignature(byte[] pdfData) {
+    public SignatureInfo verifyPdfSignature(byte[] pdfData, int requiredSignatures) {
         SignatureInfo.SignatureInfoBuilder builder = SignatureInfo.builder()
                 .isSigned(false)
+                .requiredSignatures(requiredSignatures)
+                .signatureCount(0)
+                .isPartiallySigned(false)
                 .isValid(false)
                 .isDemoSignature(false);
 
@@ -54,9 +57,15 @@ public class PdfSignatureVerificationService {
                         .build();
             }
 
-            // Verify the first (latest) signature
-            PDSignature signature = signatures.get(0);
-            builder.isSigned(true);
+            int signatureCount = signatures.size();
+            boolean isPartiallySigned = signatureCount < requiredSignatures;
+
+            builder.signatureCount(signatureCount)
+                    .isSigned(true)
+                    .isPartiallySigned(isPartiallySigned);
+
+            // Verify the latest signature
+            PDSignature signature = signatures.get(signatureCount - 1);
 
             // Get signature metadata
             if (signature.getSignDate() != null) {
@@ -81,7 +90,7 @@ public class PdfSignatureVerificationService {
                 log.info("DEMO signature detected");
                 return builder
                         .isValid(true) // DEMO signatures are considered "valid" for demo purposes
-                        .verificationStatus("DEMO signature - not cryptographically signed")
+                        .verificationStatus(buildDemoStatus(signatureCount, requiredSignatures))
                         .build();
             }
 
@@ -95,7 +104,7 @@ public class PdfSignatureVerificationService {
                 return builder
                         .isDemoSignature(true)
                         .isValid(true)
-                        .verificationStatus("DEMO signature - signature dictionary without cryptographic content")
+                        .verificationStatus(buildDemoStatus(signatureCount, requiredSignatures))
                         .build();
             }
 
@@ -106,7 +115,7 @@ public class PdfSignatureVerificationService {
                     builder
             );
 
-            return verificationResult;
+            return applySigningProgress(verificationResult, signatureCount, requiredSignatures);
 
         } catch (IOException e) {
             log.error("Error verifying PDF signature", e);
@@ -121,6 +130,57 @@ public class PdfSignatureVerificationService {
                     .errorMessage(e.getMessage())
                     .build();
         }
+    }
+
+    private SignatureInfo applySigningProgress(SignatureInfo signatureInfo, int signatureCount, int requiredSignatures) {
+        boolean isPartiallySigned = signatureCount > 0 && signatureCount < requiredSignatures;
+        boolean isFullySigned = signatureCount >= requiredSignatures;
+        String verificationStatus = signatureInfo.getVerificationStatus();
+
+        if (Boolean.TRUE.equals(signatureInfo.getIsDemoSignature())) {
+            verificationStatus = buildDemoStatus(signatureCount, requiredSignatures);
+        } else if (Boolean.TRUE.equals(signatureInfo.getIsValid())) {
+            verificationStatus = buildValidatedStatus(
+                    isPartiallySigned,
+                    isFullySigned,
+                    Boolean.TRUE.equals(signatureInfo.getIsQecCertificate()),
+                    signatureCount,
+                    requiredSignatures
+            );
+        }
+
+        return signatureInfo.toBuilder()
+                .isSigned(signatureCount > 0)
+                .requiredSignatures(requiredSignatures)
+                .signatureCount(signatureCount)
+                .isPartiallySigned(isPartiallySigned)
+                .verificationStatus(verificationStatus)
+                .build();
+    }
+
+    private String buildDemoStatus(int signatureCount, int requiredSignatures) {
+        if (signatureCount < requiredSignatures) {
+            return String.format("DEMO partially signed (%d/%d signatures)", signatureCount, requiredSignatures);
+        }
+        return String.format("DEMO signed (%d/%d signatures)", signatureCount, requiredSignatures);
+    }
+
+    private String buildValidatedStatus(
+            boolean isPartiallySigned,
+            boolean isFullySigned,
+            boolean isQecCertificate,
+            int signatureCount,
+            int requiredSignatures
+    ) {
+        if (isPartiallySigned) {
+            return String.format("Partially signed (%d/%d signatures)", signatureCount, requiredSignatures);
+        }
+        if (isFullySigned) {
+            return isQecCertificate
+                    ? String.format("Valid QEC signature (%d/%d signatures)", signatureCount, requiredSignatures)
+                    : String.format("Valid signature (%d/%d signatures)", signatureCount, requiredSignatures);
+        }
+        return "Document is not signed";
     }
 
     /**

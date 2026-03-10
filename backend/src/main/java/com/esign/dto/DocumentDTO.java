@@ -16,6 +16,9 @@ public class DocumentDTO {
     private String filename;
     private LocalDateTime uploadDate;
     private Boolean isSigned;
+    private Integer requiredSignatures;
+    private Integer signatureCount;
+    private Boolean isPartiallySigned;
     private LocalDateTime signedDate;
     private String signerName;
     private String signerCertificateIssuer;

@@ -12,6 +12,7 @@ interface DocumentViewerProps {
 }
 
 const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, onClose, onDocumentUpdated }) => {
+  const [currentDocument, setCurrentDocument] = useState<DocumentDTO>(document);
   const [pdfData, setPdfData] = useState<Uint8Array | null>(null);
   const [signatureInfo, setSignatureInfo] = useState<SignatureInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -21,6 +22,10 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, onClose, onDo
   const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
+    setCurrentDocument(document);
+  }, [document]);
+
+  useEffect(() => {
     loadDocument();
   }, [document.id]);
 
@@ -28,16 +33,22 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, onClose, onDo
     try {
       setLoading(true);
       setError(null);
-      
-      const blob = await documentApi.getDocumentContent(document.id);
+
+      const [blob, metadata] = await Promise.all([
+        documentApi.getDocumentContent(document.id),
+        documentApi.getDocumentMetadata(document.id),
+      ]);
+
       const arrayBuffer = await blob.arrayBuffer();
       setPdfData(new Uint8Array(arrayBuffer));
-      
-      // Auto-verify signature if document is marked as signed
-      if (document.isSigned) {
+      setCurrentDocument(metadata);
+
+      if (metadata.isSigned || metadata.isPartiallySigned) {
         await verifySignature();
+      } else {
+        setSignatureInfo(null);
       }
-      
+
       setLoading(false);
     } catch (err) {
       console.error('Error loading document:', err);
@@ -50,7 +61,9 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, onClose, onDo
     try {
       setVerifying(true);
       const info = await documentApi.verifySignature(document.id);
+      const metadata = await documentApi.getDocumentMetadata(document.id);
       setSignatureInfo(info);
+      setCurrentDocument(metadata);
     } catch (err) {
       console.error('Error verifying signature:', err);
       setError('Failed to verify signature');
@@ -70,13 +83,16 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, onClose, onDo
       setError(null);
       setSuccess(null);
 
-      // Check browser support
+      if (currentDocument.signatureCount >= currentDocument.requiredSignatures) {
+        setError('This document already has all required signatures');
+        return;
+      }
+
       if (!PdfSigningService.isBrowserSupported()) {
         setError('Your browser does not support the required cryptographic APIs');
         return;
       }
 
-      // Show info about demo mode
       const useDemoSign = confirm(
         'DEMO MODE:\n\n' +
         'This demo will create a visible signature annotation.\n\n' +
@@ -92,29 +108,25 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, onClose, onDo
         return;
       }
 
-      // For demo: create visible signature
-      // In production: use PdfSigningService.signPdfWithCertificate()
       const signerName = prompt('Enter signer name:', 'QEC Demo User');
       if (!signerName) {
         setSigning(false);
         return;
       }
 
-      const signedPdfBytes = await addVisibleSignature(pdfData, signerName);
+      const nextSignatureNumber = currentDocument.signatureCount + 1;
+      const signedPdfBytes = await addVisibleSignature(pdfData, signerName, nextSignatureNumber);
 
-      // Create a File object from the signed PDF
-      const signedBlob = new Blob([signedPdfBytes], { type: 'application/pdf' });
-      const signedFile = new File([signedBlob], document.filename, { type: 'application/pdf' });
+      const signedPdfBuffer = signedPdfBytes.slice().buffer as ArrayBuffer;
+      const signedBlob = new Blob([signedPdfBuffer], { type: 'application/pdf' });
+      const signedFile = new File([signedBlob], currentDocument.filename, { type: 'application/pdf' });
 
-      // Upload signed document
-      const updatedDoc = await documentApi.updateSignedDocument(document.id, signedFile);
-      
-      setSuccess('Document signed successfully! Note: This is a demo signature. In production, a cryptographic signature would be embedded.');
-      
-      // Reload document
+      const updatedDoc = await documentApi.updateSignedDocument(currentDocument.id, signedFile);
+      setCurrentDocument(updatedDoc);
+      setSuccess(`Document signed successfully. Signature progress: ${updatedDoc.signatureCount}/${updatedDoc.requiredSignatures}. Note: This is a demo signature.`);
+
       await loadDocument();
       onDocumentUpdated();
-
     } catch (err: any) {
       console.error('Error signing document:', err);
       setError(`Failed to sign document: ${err.message}`);
@@ -125,7 +137,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, onClose, onDo
 
   const handleDownload = async () => {
     try {
-      await documentApi.downloadDocument(document.id, document.filename);
+      await documentApi.downloadDocument(currentDocument.id, currentDocument.filename);
     } catch (err) {
       setError('Failed to download document');
     }
@@ -144,35 +156,41 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, onClose, onDo
   return (
     <div className="modal">
       <div className="modal-content" style={{ maxWidth: '1200px' }}>
-        <button className="modal-close" onClick={onClose}>×</button>
-        
-        <h2>{document.filename}</h2>
-        
+        <button className="modal-close" onClick={onClose}>x</button>
+
+        <h2>{currentDocument.filename}</h2>
+
+        <div className="signature-progress-banner">
+          <strong>Signature progress:</strong> {currentDocument.signatureCount}/{currentDocument.requiredSignatures}
+          {currentDocument.isPartiallySigned && <span className="badge badge-info">DEMO Partially Signed</span>}
+          {currentDocument.isSigned && currentDocument.isDemoSignature && <span className="badge badge-info">DEMO Signed</span>}
+        </div>
+
         <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          {!document.isSigned && (
+          {currentDocument.signatureCount < currentDocument.requiredSignatures && (
             <button
               onClick={handleSignDocument}
               disabled={signing}
               className="btn btn-success"
             >
-              {signing ? 'Signing...' : '✍️ Sign Document'}
+              {signing ? 'Signing...' : `Add Signature ${currentDocument.signatureCount + 1}`}
             </button>
           )}
-          
-          {document.isSigned && (
+
+          {(currentDocument.isSigned || currentDocument.isPartiallySigned) && (
             <button
               onClick={verifySignature}
               disabled={verifying}
               className="btn btn-primary"
             >
-              {verifying ? 'Verifying...' : '🔍 Verify Signature'}
+              {verifying ? 'Verifying...' : 'Verify Signatures'}
             </button>
           )}
-          
+
           <button onClick={handleDownload} className="btn btn-secondary">
-            💾 Download
+            Download
           </button>
-          
+
           <button onClick={onClose} className="btn btn-secondary">
             Close
           </button>

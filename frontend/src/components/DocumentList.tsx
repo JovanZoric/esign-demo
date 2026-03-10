@@ -48,6 +48,10 @@ const DocumentList: React.FC<DocumentListProps> = ({ documents, onRefresh, onSel
   };
 
   const getSignatureStatusBadge = (doc: DocumentDTO) => {
+    if (doc.isPartiallySigned) {
+      return <span className="badge badge-info">DEMO Partially Signed</span>;
+    }
+
     if (!doc.isSigned) {
       return <span className="badge badge-warning">Unsigned</span>;
     }
@@ -93,6 +97,7 @@ const DocumentList: React.FC<DocumentListProps> = ({ documents, onRefresh, onSel
                 {getSignatureStatusBadge(doc)}
               </h3>
               <p>Uploaded: {formatDate(doc.uploadDate)}</p>
+              <p>Signature progress: {doc.signatureCount}/{doc.requiredSignatures}</p>
               {doc.isSigned && doc.signedDate && (
                 <p>Signed: {formatDate(doc.signedDate)}</p>
               )}

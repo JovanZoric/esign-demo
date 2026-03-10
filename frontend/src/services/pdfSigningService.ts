@@ -128,7 +128,7 @@ export class PdfSigningService {
    */
   private async preparePdfForSigning(
     pdfDoc: PDFDocument,
-    placeholder: any
+    _placeholder: any
   ): Promise<{ pdf: Uint8Array, contentToSign: Uint8Array }> {
     // For simplicity, we'll create a basic signed PDF structure
     // In production, use proper PDF signing libraries that handle ByteRange correctly
@@ -149,7 +149,7 @@ export class PdfSigningService {
     const md = forge.md.sha256.create();
     md.update(forge.util.binary.raw.encode(data));
     
-    const signature = privateKey.sign(md);
+    const signature = (privateKey as any).sign(md);
     return new Uint8Array(forge.util.binary.raw.decode(signature));
   }
 
@@ -157,13 +157,13 @@ export class PdfSigningService {
    * Create PKCS#7 signature structure
    */
   private createPkcs7Signature(
-    signature: Uint8Array,
+    _signature: Uint8Array,
     certificate: forge.pki.Certificate,
     data: Uint8Array
   ): Uint8Array {
     const p7 = forge.pkcs7.createSignedData();
     
-    p7.content = forge.util.createBuffer(data);
+    p7.content = forge.util.createBuffer(forge.util.binary.raw.encode(data));
     p7.addCertificate(certificate);
     
     p7.addSigner({
@@ -180,7 +180,7 @@ export class PdfSigningService {
         },
         {
           type: forge.pki.oids.signingTime,
-          value: new Date()
+          value: new Date().toISOString()
         }
       ]
     });
@@ -193,7 +193,7 @@ export class PdfSigningService {
   /**
    * Embed signature into PDF
    */
-  private embedSignature(pdfBytes: Uint8Array, signature: Uint8Array): Uint8Array {
+  private embedSignature(pdfBytes: Uint8Array, _signature: Uint8Array): Uint8Array {
     // This is a simplified version
     // Real implementation should properly modify PDF structure to embed signature
     
@@ -253,22 +253,38 @@ export class PdfSigningService {
  */
 export async function addVisibleSignature(
   pdfBytes: Uint8Array,
-  signerName: string
+  signerName: string,
+  signatureNumber: number
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.load(pdfBytes);
   const pages = pdfDoc.getPages();
   const lastPage = pages[pages.length - 1];
+  const pageWidth = lastPage.getWidth();
+  const fieldWidth = 220;
+  const fieldHeight = 70;
+  const margin = 36;
+  const gap = 12;
+
+  const slotPositions = [
+    { x: margin, y: margin + fieldHeight + gap },
+    { x: pageWidth - margin - fieldWidth, y: margin + fieldHeight + gap },
+    { x: margin, y: margin },
+    { x: pageWidth - margin - fieldWidth, y: margin },
+  ];
+
+  const slotIndex = Math.min(Math.max(signatureNumber, 1), 4) - 1;
+  const slot = slotPositions[slotIndex];
   
   // Add signature text annotation
-  lastPage.drawText(`Digitally signed by: ${signerName}`, {
-    x: 50,
-    y: 50,
+  lastPage.drawText(`Signature ${signatureNumber}: ${signerName}`, {
+    x: slot.x,
+    y: slot.y + 26,
     size: 12,
   });
   
   lastPage.drawText(`Date: ${new Date().toLocaleString()}`, {
-    x: 50,
-    y: 35,
+    x: slot.x,
+    y: slot.y + 11,
     size: 10,
   });
 
@@ -304,11 +320,11 @@ export async function addVisibleSignature(
   // Create a signature field
   const signatureField = context.obj({
     FT: 'Sig',
-    T: PDFHexString.fromText('DemoSignature'),
+    T: PDFHexString.fromText(`DemoSignature${signatureNumber}`),
     V: signatureRef,
     Type: 'Annot',
     Subtype: 'Widget',
-    Rect: [50, 30, 250, 60],
+    Rect: [slot.x, slot.y, slot.x + fieldWidth, slot.y + fieldHeight],
     P: lastPage.ref,
   });
 

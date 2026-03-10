@@ -27,7 +27,8 @@ public class DocumentController {
 
     @PostMapping("/upload")
     public ResponseEntity<DocumentDTO> uploadDocument(
-            @RequestParam("file") MultipartFile file
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "requiredSignatures", defaultValue = "1") Integer requiredSignatures
     ) {
         log.info("Uploading document: {}", file.getOriginalFilename());
 
@@ -39,7 +40,7 @@ public class DocumentController {
             throw new IllegalArgumentException("Only PDF files are allowed");
         }
 
-        DocumentDTO document = documentService.uploadDocument(file);
+        DocumentDTO document = documentService.uploadDocument(file, requiredSignatures);
         return ResponseEntity.ok(document);
     }
 

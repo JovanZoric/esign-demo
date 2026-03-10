@@ -22,7 +22,9 @@ const SignatureDetails: React.FC<SignatureDetailsProps> = ({ signatureInfo }) =>
       <dl>
         <dt>Status:</dt>
         <dd>
-          {signatureInfo.isDemoSignature ? (
+          {signatureInfo.isDemoSignature && signatureInfo.isPartiallySigned ? (
+            <span className="badge badge-info" style={{ backgroundColor: '#17a2b8' }}>DEMO Partially Signed</span>
+          ) : signatureInfo.isDemoSignature ? (
             <span className="badge badge-info" style={{ backgroundColor: '#17a2b8' }}>DEMO Signature</span>
           ) : signatureInfo.isValid ? (
             <span className="badge badge-success">Valid Signature</span>
@@ -35,6 +37,13 @@ const SignatureDetails: React.FC<SignatureDetailsProps> = ({ signatureInfo }) =>
             </span>
           )}
         </dd>
+
+        {typeof signatureInfo.signatureCount === 'number' && typeof signatureInfo.requiredSignatures === 'number' && (
+          <>
+            <dt>Signature Progress:</dt>
+            <dd>{signatureInfo.signatureCount}/{signatureInfo.requiredSignatures}</dd>
+          </>
+        )}
 
         {signatureInfo.verificationStatus && (
           <>
@@ -95,7 +104,7 @@ const SignatureDetails: React.FC<SignatureDetailsProps> = ({ signatureInfo }) =>
 
       {signatureInfo.isDemoSignature && (
         <div className="info" style={{ marginTop: '1rem', backgroundColor: '#d1ecf1', borderColor: '#bee5eb', color: '#0c5460' }}>
-          <strong>ℹ DEMO Signature</strong>
+          <strong>{signatureInfo.isPartiallySigned ? 'ℹ DEMO Partial Signature' : 'ℹ DEMO Signature'}</strong>
           <p style={{ margin: '0.5rem 0 0' }}>
             This document is signed with a DEMO signature for testing purposes.
             It is not cryptographically secured and should not be used in production.

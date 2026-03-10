@@ -3,6 +3,9 @@ export interface DocumentDTO {
   filename: string;
   uploadDate: string;
   isSigned: boolean;
+  requiredSignatures: number;
+  signatureCount: number;
+  isPartiallySigned: boolean;
   signedDate?: string;
   signerName?: string;
   signerCertificateIssuer?: string;
@@ -17,6 +20,9 @@ export interface DocumentDTO {
 
 export interface SignatureInfo {
   isSigned: boolean;
+  requiredSignatures?: number;
+  signatureCount?: number;
+  isPartiallySigned?: boolean;
   signerName?: string;
   signerCertificateIssuer?: string;
   certificateSerialNumber?: string;

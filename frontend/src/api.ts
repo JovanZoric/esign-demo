@@ -4,9 +4,10 @@ import { DocumentDTO, SignatureInfo } from './types';
 const API_BASE_URL = '/api/documents';
 
 export const documentApi = {
-  uploadDocument: async (file: File): Promise<DocumentDTO> => {
+  uploadDocument: async (file: File, requiredSignatures: number): Promise<DocumentDTO> => {
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('requiredSignatures', String(requiredSignatures));
     const response = await axios.post(`${API_BASE_URL}/upload`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });

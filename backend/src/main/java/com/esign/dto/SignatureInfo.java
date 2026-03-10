@@ -6,11 +6,14 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Data
-@Builder
+@Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 public class SignatureInfo {
     private Boolean isSigned;
+    private Integer requiredSignatures;
+    private Integer signatureCount;
+    private Boolean isPartiallySigned;
     private String signerName;
     private String signerCertificateIssuer;
     private String certificateSerialNumber;
